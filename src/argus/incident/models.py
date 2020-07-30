@@ -96,6 +96,7 @@ class IncidentQuerySet(models.QuerySet):
         return self.select_related("parent_object", "problem_type").prefetch_related("source__type", "object__type")
 
 
+# TODO
 # TODO: review whether fields should be nullable, and on_delete modes
 class Incident(models.Model):
     timestamp = models.DateTimeField()
@@ -137,6 +138,32 @@ class Incident(models.Model):
 
     objects = IncidentQuerySet.as_manager()
 
+    def save(self, *args, **kwargs):
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        from .serializers import IncidentSerializer
+
+        ret = super().save(*args, **kwargs)
+        # This is the wrapper that lets you call an async
+        # function from inside a synchronous context:
+        serializer = IncidentSerializer(self)
+        channel_layer = get_channel_layer()
+        print("channel_layer", channel_layer)
+        content = {
+            "type": "modified",
+            "payload": serializer.data,
+        }
+        print("sending to group", "subscribed_active_incidents")
+        async_to_sync(channel_layer.group_send)("subscribed_active_incidents", {
+            # This "type" defines which handler on the Consumer gets
+            # called.
+            "type": "notify",
+            "content": content,
+        })
+        print("sent to group", "subscribed_active_incidents")
+        return ret
+
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -161,6 +188,31 @@ class ActiveIncident(models.Model):
         related_name="active_state",
         help_text="Whether the incident has been resolved.",
     )
+
+    def save(self, *args, **kwargs):
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        from .serializers import IncidentSerializer
+
+        ret = super().save(*args, **kwargs)
+        # This is the wrapper that lets you call an async
+        # function from inside a synchronous context:
+        serializer = IncidentSerializer(self.incident)
+        channel_layer = get_channel_layer()
+        print("channel_layer", channel_layer)
+        content = {
+            "type": "modified",
+            "payload": serializer.data,
+        }
+        print("sending to group", "subscribed_active_incidents")
+        async_to_sync(channel_layer.group_send)("subscribed_active_incidents", {
+            # This "type" defines which handler on the Consumer gets
+            # called.
+            "type": "notify",
+            "content": content,
+        })
+        print("sent to group", "subscribed_active_incidents")
+        return ret
 
 
 class IncidentRelationType(models.Model):

@@ -30,3 +30,4 @@ class MappingUtils:
     def prepare_field_value_getters(model: Type[models.Model], field_mappings: dict):
         for field_name, field_value_getter in field_mappings.items():
             field_value_getter.prepare(field_name, model)
+
