@@ -1,6 +1,7 @@
 from django.core.validators import URLValidator
 from django.db import models
 from django.db.models import Q, QuerySet
+from django.db.models.signals import post_save, pre_save
 
 from argus.auth.models import User
 
@@ -138,32 +139,6 @@ class Incident(models.Model):
 
     objects = IncidentQuerySet.as_manager()
 
-    def save(self, *args, **kwargs):
-        from asgiref.sync import async_to_sync
-        from channels.layers import get_channel_layer
-        from .serializers import IncidentSerializer
-
-        ret = super().save(*args, **kwargs)
-        # This is the wrapper that lets you call an async
-        # function from inside a synchronous context:
-        serializer = IncidentSerializer(self)
-        channel_layer = get_channel_layer()
-        print("channel_layer", channel_layer)
-        content = {
-            "type": "modified",
-            "payload": serializer.data,
-        }
-        print("sending to group", "subscribed_active_incidents")
-        async_to_sync(channel_layer.group_send)("subscribed_active_incidents", {
-            # This "type" defines which handler on the Consumer gets
-            # called.
-            "type": "notify",
-            "content": content,
-        })
-        print("sent to group", "subscribed_active_incidents")
-        return ret
-
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -188,31 +163,6 @@ class ActiveIncident(models.Model):
         related_name="active_state",
         help_text="Whether the incident has been resolved.",
     )
-
-    def save(self, *args, **kwargs):
-        from asgiref.sync import async_to_sync
-        from channels.layers import get_channel_layer
-        from .serializers import IncidentSerializer
-
-        ret = super().save(*args, **kwargs)
-        # This is the wrapper that lets you call an async
-        # function from inside a synchronous context:
-        serializer = IncidentSerializer(self.incident)
-        channel_layer = get_channel_layer()
-        print("channel_layer", channel_layer)
-        content = {
-            "type": "modified",
-            "payload": serializer.data,
-        }
-        print("sending to group", "subscribed_active_incidents")
-        async_to_sync(channel_layer.group_send)("subscribed_active_incidents", {
-            # This "type" defines which handler on the Consumer gets
-            # called.
-            "type": "notify",
-            "content": content,
-        })
-        print("sent to group", "subscribed_active_incidents")
-        return ret
 
 
 class IncidentRelationType(models.Model):
