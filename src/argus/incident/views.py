@@ -74,12 +74,46 @@ class SourceSystemDetail(generics.RetrieveUpdateAPIView):
     serializer_class = SourceSystemSerializer
 
 
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
+
 class IncidentViewSet(
     mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
-    queryset = Incident.objects.prefetch_default_related()
+    # queryset = Incident.objects.prefetch_default_related()
     serializer_class = IncidentSerializer
+
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        """
+        Optionally restricts the returned purchases to a given user,
+        by filtering against a `username` query parameter in the URL.
+        """
+
+
+        queryset = Incident.objects.prefetch_default_related()
+
+        active = self.request.query_params.get('active', None)
+        if active is not None:
+            if bool(active):
+                queryset = queryset.active()
+            else:
+                queryset = queryset.inactive()
+        stateful = self.request.query_params.get('stateful', None)
+        if stateful is not None and type(stateful) is bool:
+            if bool(stateful):
+                queryset = queryset.stateful()
+            else:
+                queryset = queryset.stateless()
+
+        return queryset
 
     # TODO: replace action with simply setting end_time directly
     @action(detail=True, methods=["put"])
